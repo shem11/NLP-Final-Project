@@ -45,7 +45,8 @@ class BertSentimentClassifier(torch.nn.Module):
                 param.requires_grad = True
 
         ### TODO
-        raise NotImplementedError
+        #raise NotImplementedError
+        self.fc = torch.nn.Linear(config.hidden_size, config.num_labels)
 
 
     def forward(self, input_ids, attention_mask):
@@ -54,8 +55,18 @@ class BertSentimentClassifier(torch.nn.Module):
         # HINT: you should consider what is the appropriate output to return given that
         # the training loop currently uses F.cross_entropy as the loss function.
         ### TODO
-        raise NotImplementedError
-
+        #raise NotImplementedError
+            #     """Takes a batch of sentences and returns logits for sentiment classes."""
+            # Pass input data through the BERT model
+        outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
+            
+            # Get the pooled output (embedding of the [CLS] token)
+        pooled_output = outputs['pooler_output']
+            
+            # Pass the pooled output through the fully connected layer to get logits
+        logits = self.fc(pooled_output)
+            
+        return logits
 
 
 class SentimentDataset(Dataset):
