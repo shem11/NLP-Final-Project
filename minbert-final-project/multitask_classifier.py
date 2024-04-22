@@ -53,13 +53,14 @@ class MultitaskBERT(nn.Module):
                 param.requires_grad = True
         ### TODO
 
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+
         # For sentiment classification
         self.sentiment_classifier = nn.Linear(config.hidden_size, 5)
         # For paraphrase detection
         self.paraphrase_classifier = nn.Linear(config.hidden_size*2, 1)
         # For semantic textual similarity
         self.similarity_classifier = nn.Linear(config.hidden_size*2, 1)
-
 
 
 
@@ -76,6 +77,7 @@ class MultitaskBERT(nn.Module):
         outputs = self.bert(input_ids, attention_mask)
         # cls hidden states
         cls_hidden_states = outputs['pooler_output']
+        cls_hidden_states = self.dropout(cls_hidden_states)
         return cls_hidden_states
 
 
@@ -140,6 +142,18 @@ def save_model(model, optimizer, args, config, filepath):
     torch.save(save_info, filepath)
     print(f"save the model to {filepath}")
 
+# Multiple negatives ranking loss learning
+def mnr_loss(scores, target):
+    batch_size, num_items = scores.size()
+    target = target.view(-1, 1)
+    mask = torch.zeros_like(scores).scatter(1, target, 1).bool()
+    positive_scores = scores.gather(1, target).squeeze(1)
+    negative_scores = scores.masked_fill(mask, -float('inf'))
+    loss = F.log_softmax(negative_scores, dim=1).exp().sum(1)
+    loss = -torch.log(1 / (1 + loss))
+    print(loss)
+    return loss.mean()
+
 
 ## Currently only trains on sst dataset
 def train_multitask(args):
@@ -189,6 +203,9 @@ def train_multitask(args):
             optimizer.zero_grad()
             logits = model.predict_sentiment(b_ids, b_mask)
             loss = F.cross_entropy(logits, b_labels.view(-1), reduction='sum') / args.batch_size
+
+            # MNR loss
+            #loss = mnr_loss(logits, b_labels.view(-1))
 
             loss.backward()
             optimizer.step()
@@ -257,7 +274,7 @@ def get_args():
     parser.add_argument("--batch_size", help='sst: 64, cfimdb: 8 can fit a 12GB GPU', type=int, default=8)
     parser.add_argument("--hidden_dropout_prob", type=float, default=0.3)
     parser.add_argument("--lr", type=float, help="learning rate, default lr for 'pretrain': 1e-3, 'finetune': 1e-5",
-                        default=1e-5)
+                        default=1e-2)
 
     args = parser.parse_args()
     return args
