@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+
 conda create -n nlp_fp python=3.8
 conda activate nlp_fp
 

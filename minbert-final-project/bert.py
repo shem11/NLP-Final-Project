@@ -47,45 +47,26 @@ class BertSelfAttention(nn.Module):
     # next, we need to concat multi-heads and recover the original shape [bs, seq_len, num_attention_heads * attention_head_size = hidden_size]
 
     ### TODO
-    # scores = torch.
-    # S = self.query(query) * self.key(key)
-    # normalized_scores = nn.Dropout(F.softmax(query * key)*attention_mask)
-    # V = normalized_scores * value
-    # return torch.cat(V)
 
+    # sqrt of attention head size for scaling
+    sqrt_ahs = math.sqrt(self.attention_head_size)
 
-    #seq_len = query.size(2)
-    # Transform query, key, and value tensors
-    # query = self.transform(query, self.query)  # Shape: [batch_size, num_attention_heads, seq_len, attention_head_size]
-    # key = self.transform(key, self.key)        # Shape: [batch_size, num_attention_heads, seq_len, attention_head_size]
-    # value = self.transform(value, self.value)  # Shape: [batch_size, num_attention_heads, seq_len, attention_head_size]
+    # calculate scores & add attention mask
+    scores = torch.matmul(query, key.transpose(-1, -2)/sqrt_ahs) + attention_mask
 
-    # # Calculate attention scores
-    # scores = torch.matmul(query, key.transpose(-1, -2))  # Shape: [batch_size, num_attention_heads, seq_len, seq_len]
+    # normalize scores using softmax
+    scores = F.softmax(scores, dim=-1)
 
-    # # Apply attention mask
-    # scores = scores + attention_mask.unsqueeze(1).unsqueeze(1)  # Additive attention mask
+    # apply dropout
+    scores = self.dropout(scores)
 
-    # # Normalize the scores using softmax
-    # attention_probs = torch.nn.functional.softmax(scores, dim=-1)  # Shape: [batch_size, num_attention_heads, seq_len, seq_len]
+    # "multiply the attention scores to the value and get back V"
+    V = torch.matmul(scores, value)
 
-    # # Apply dropout
-    # attention_probs = self.dropout(attention_probs)
+    # concat multi-heads and recover original shape [bs, seq_len, num_attention_heads * attention_head_size = hidden_size]
+    multi_head_attention = V.transpose(1, 2).contiguous().view(query.shape[0], query.shape[2], self.all_head_size)
 
-    # # Weighted sum of values
-    # context_layer = torch.matmul(attention_probs, value)  # Shape: [batch_size, num_attention_heads, seq_len, attention_head_size]
-
-    # # Concatenate attention heads
-    # context_layer = context_layer.transpose(1, 2).contiguous().view(-1, seq_len, self.all_head_size)  # Shape: [batch_size, seq_len, hidden_size]
-
-    # return context_layer
-        scores = torch.matmul(query, key.transpose(-1, -2))
-        scores = scores / math.sqrt(self.attention_head_size)
-        scores = scores + attention_mask.unsqueeze(1).unsqueeze(1)
-        attention_probs = torch.nn.functional.softmax(scores, dim=-1)
-        attention_probs = self.dropout(attention_probs)
-        context_layer = torch.matmul(attention_probs, value)
-        return context_layer
+    return multi_head_attention
 
 
   def forward(self, hidden_states, attention_mask):
@@ -132,14 +113,11 @@ class BertLayer(nn.Module):
     """
     # Hint: Remember that BERT applies to the output of each sub-layer, before it is added to the sub-layer input and normalized 
     ### TODO
-    #raise NotImplementedError
-    #print(input.shape)
-    #print(output.shape)
-    add_res = input + output
-    dense_output = dense_layer(add_res)
-    ln_output = ln_layer(dense_output)
-    dropout_output = dropout(ln_output)
-    return dropout_output
+    norm = dense_layer(output)
+    norm = dropout(norm)
+    norm = norm + input
+    norm = ln_layer(norm)
+    return norm
 
 
   def forward(self, hidden_states, attention_mask):
@@ -159,13 +137,9 @@ class BertLayer(nn.Module):
 
     #2. norm
     norm_out = self.add_norm(hidden_states, attention_out, self.attention_dense, self.attention_layer_norm, self.attention_dropout)
-    # att_transformed = self.attention_dense(attention_out)
-    # att_out_drop = self.attention_dropout(att_transformed)
-    # norm_out = self.attention_layer_norm(att_out_drop)
     
     #3. feed foward layer 
-    intermediate_output = self.interm_dense(norm_out)
-    feed_forward_output = self.interm_af(intermediate_output)
+    feed_forward_output = self.interm_af(self.interm_dense(norm_out))
 
     #4. add-norm layes
     result = self.add_norm(norm_out, feed_forward_output, self.out_dense, self.out_layer_norm, self.out_dropout)
@@ -209,17 +183,11 @@ class BertModel(BertPreTrainedModel):
     seq_length = input_shape[1]
 
     # Get word embedding from self.word_embedding into input_embeds.
-    inputs_embeds = self.word_embedding(input_ids) #None
-    ### TODO
-    ##raise NotImplementedError
-
+    inputs_embeds = self.word_embedding(input_ids)
 
     # Get position index and position embedding from self.pos_embedding into pos_embeds.
     pos_ids = self.position_ids[:, :seq_length]
-
     pos_embeds = self.pos_embedding(pos_ids)
-    ### TODO
-    #raise NotImplementedError
 
 
     # Get token type ids, since we are not consider token type, just a placeholder.
@@ -227,13 +195,10 @@ class BertModel(BertPreTrainedModel):
     tk_type_embeds = self.tk_type_embedding(tk_type_ids)
 
     # Add three embeddings together; then apply embed_layer_norm and dropout and return.
-    ### TODO
-    #raise NotImplementedError
-
     embeddings = inputs_embeds + pos_embeds + tk_type_embeds
-
     embeddings = self.embed_layer_norm(embeddings)
     embeddings = self.embed_dropout(embeddings)
+
     return embeddings
 
 

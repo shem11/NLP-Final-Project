@@ -42,8 +42,14 @@ class AdamW(Optimizer):
                 # State should be stored in this dictionary
                 state = self.state[p]
 
+
+
                 # Access hyperparameters from the `group` dictionary
                 alpha = group["lr"]
+                beta1, beta2 = group["betas"]
+                eps = group["eps"]
+                weight_decay = group["weight_decay"]
+                correct_bias = group["correct_bias"]
 
                 # Complete the implementation of AdamW here, reading and saving
                 # your state in the `state` dictionary above.
@@ -58,8 +64,41 @@ class AdamW(Optimizer):
                 # 4- After that main gradient-based update, update again using weight decay
                 #    (incorporating the learning rate again).
 
-                ### TODO
-                raise NotImplementedError
+                if len(state) == 0:
+                    state["t"] = 0
+                    state["mt"] = torch.zeros_like(p.data)
+                    state["vt"] = torch.zeros_like(p.data)
+
+                state["t"] += 1
+                mt, vt, t = state["mt"], state["vt"], state["t"]
+
+
+                # 1- Update first and second moments of the gradients
+                mt.mul_(beta1)
+                mt.add_(grad, alpha=(1 - beta1))
+                vt.mul_(beta2).addcmul_(grad, grad, value=(1 - beta2))
+
+                # 2- Apply bias correction
+                if correct_bias == True:
+                    m_t_h = mt / (1 - beta1 ** t)
+                    v_t_h = vt / (1 - beta2 ** t)
+                else:
+                    m_t_h = mt
+                    v_t_h = vt
+
+                # 3- Update parameters (p.data).
+                p.data.addcdiv_(m_t_h, v_t_h.sqrt().add(eps), value=-alpha)
+
+                # 4- After that main gradient-based update, update again using weight decay
+                if weight_decay != 0:
+                    p.data.add_(p.data, alpha=-alpha * weight_decay)
+
+
+
+
+
+                #raise NotImplementedError
 
 
         return loss
+

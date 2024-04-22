@@ -44,8 +44,7 @@ class BertSentimentClassifier(torch.nn.Module):
             elif config.option == 'finetune':
                 param.requires_grad = True
 
-        ### TODO
-        #raise NotImplementedError
+
         self.fc = torch.nn.Linear(config.hidden_size, config.num_labels)
 
 
@@ -54,16 +53,15 @@ class BertSentimentClassifier(torch.nn.Module):
         # The final BERT contextualized embedding is the hidden state of [CLS] token (the first token).
         # HINT: you should consider what is the appropriate output to return given that
         # the training loop currently uses F.cross_entropy as the loss function.
-        ### TODO
-        #raise NotImplementedError
-            #     """Takes a batch of sentences and returns logits for sentiment classes."""
-            # Pass input data through the BERT model
+
+
+        # Pass input data through the BERT model
         outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask)
             
-            # Get the pooled output (embedding of the [CLS] token)
+        # Get the pooled output (embedding of the [CLS] token)
         pooled_output = outputs['pooler_output']
             
-            # Pass the pooled output through the fully connected layer to get logits
+        # Pass the pooled output through the fully connected layer to get logits
         logits = self.fc(pooled_output)
             
         return logits
